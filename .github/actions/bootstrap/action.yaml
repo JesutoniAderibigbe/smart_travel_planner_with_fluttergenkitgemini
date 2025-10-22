@@ -13,7 +13,7 @@ runs:
       shell: bash
       run: |
         flutter pub get
-        flutter gen-l10n
+       
 
     - name: Bootstrap Widgetbook
       working-directory: widgetbook
