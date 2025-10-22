@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:smart_traveller_app/src/models/mock_itinerary.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ItinernaryScreen extends StatefulWidget {
   const ItinernaryScreen({super.key});
@@ -75,13 +79,51 @@ class _ItinernaryScreenState extends State<ItinernaryScreen> {
                 children: [
                   _buildDaySelector(),
                   const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.network(
-                      'https://developers.google.com/static/maps/images/landing/react-codelab-thumbnail.png',
-                      fit: BoxFit.cover,
-                      height: 180,
-                      width: double.infinity,
+                  SizedBox(
+                    height: 180,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: LatLng(
+                            51.509364,
+                            -0.128928,
+                          ), // Initial map location (London)
+                          initialZoom: 9.2,
+                        ),
+
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName:
+                                'com.example.smart_traveller_app', // Your app's package name
+                          ),
+
+                          // RichAttributionWidget(
+                          //   // Include a stylish prebuilt attribution widget that meets all requirments
+                          //   attributions: [
+                          //     TextSourceAttribution(
+                          //       'OpenStreetMap contributors',
+                          //       onTap:
+                          //           () => launchUrl(
+                          //             Uri.parse(
+                          //               'https://openstreetmap.org/copyright',
+                          //             ),
+                          //           ), // (external)
+                          //     ),
+                          //     // Also add images...
+                          //   ],
+                          // ),
+                        ],
+                      ),
+
+                      // Image.network(
+                      //   'https://developers.google.com/static/maps/images/landing/react-codelab-thumbnail.png',
+                      //   fit: BoxFit.cover,
+                      //   height: 180,
+                      //   width: double.infinity,
+                      // ),
                     ),
                   ),
                 ],
@@ -91,7 +133,7 @@ class _ItinernaryScreenState extends State<ItinernaryScreen> {
           _buildActivityList(),
           _buildNearbySuggestions(),
         ],
-      ),
+      ).animate().fade(duration: 500.ms).slide(begin: const Offset(0, 0.1), duration: 500.ms),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {},
         icon: const Icon(Icons.refresh, color: Colors.white),

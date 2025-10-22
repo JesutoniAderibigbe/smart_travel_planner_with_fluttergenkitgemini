@@ -43,25 +43,25 @@ class _SplashScreenState extends State<SplashScreen>
             flex: 2,
 
             child: Container(
-              color: Color(0xFFFF7A00),
+              color: Color(0xFFE0F7FF),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Lottie.asset(
-                        'assets/images/maps_animation.json',
-                        controller: _controller,
-                        repeat: true,
+                      'assets/images/maps_animation.json',
+                      controller: _controller,
+                      repeat: true,
 
-                        height: 200,
-                        width: 200,
-                        onLoaded: (composition) {
-                          _controller
-                            ..duration = composition.duration
-                            ..repeat();
-                        },
-                      ),
-                  
+                      height: 200,
+                      width: 200,
+                      onLoaded: (composition) {
+                        _controller
+                          ..duration = composition.duration
+                          ..repeat();
+                      },
+                    ),
+
                     const SizedBox(height: 8),
                     Text(
                       'WanderAI',

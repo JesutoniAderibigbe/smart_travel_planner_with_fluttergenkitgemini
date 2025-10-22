@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 class PlanTripScreen extends StatefulWidget {
@@ -13,6 +14,7 @@ class _PlanTripScreenState extends State<PlanTripScreen> {
   final Set<String> _selectedInterests = {'Culture'};
   TextEditingController firstDateController = TextEditingController();
   TextEditingController secondDateController = TextEditingController();
+  bool _isLoading = false;
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -124,6 +126,7 @@ class _PlanTripScreenState extends State<PlanTripScreen> {
               
               decoration: InputDecoration(
                 hintText: 'Number of Travelers',
+              
                 prefixIcon: Icon(Icons.person_outline),
               ),
             ),
@@ -176,13 +179,30 @@ class _PlanTripScreenState extends State<PlanTripScreen> {
             const SizedBox(height: 48),
 
             ElevatedButton(
-              onPressed: () => context.push('/itinerary'),
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                });
+
+                Future.delayed(Duration(seconds: 5), () {
+                  context.push('/itinerary');
+
+                  setState(() {
+                    _isLoading = false;
+                  });
+                });
+              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFA6B4D),
+                backgroundColor: const Color(0xFFE0F7FF),
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 56),
               ),
-              child: const Text('Generate Itinerary'),
+              child:
+                  _isLoading
+                      ? const CircularProgressIndicator.adaptive(
+                        backgroundColor: Colors.black, // Optional: for contrast
+                      )
+                      : const Text('Generate Itinerary'),
             ),
 
             // Add preferences selection widget here
@@ -196,7 +216,7 @@ class _PlanTripScreenState extends State<PlanTripScreen> {
             // ),
           ],
         ),
-      ),
+      ).animate().fade(duration: 500.ms).slide(begin: const Offset(0, 0.1), duration: 500.ms),
     );
   }
 
