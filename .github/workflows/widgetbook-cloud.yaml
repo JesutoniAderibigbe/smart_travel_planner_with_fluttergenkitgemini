@@ -1,7 +1,6 @@
 name: Widgetbook Cloud
 
 on: push
-
 jobs:
   production:
     runs-on: ubuntu-latest
