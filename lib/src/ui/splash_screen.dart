@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -21,6 +22,7 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       //  duration: const Duration(seconds: 10),
     );
+
     //..forward();
   }
 
@@ -31,6 +33,21 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
 
     _controller.dispose();
+  }
+
+  Future<void> initializeApp() async {
+    try {
+      // Sign the user in anonymously if they aren't already
+      UserCredential userCredential =
+          await FirebaseAuth.instance.signInAnonymously();
+      print("User signed in anonymously: ${userCredential.user?.uid}");
+    } catch (e) {
+      print("Error signing in anonymously: $e");
+    }
+
+    // Now that sign-in is attempted, continue to your app
+    // (Your existing splash screen logic)
+    GoRouter.of(context).pushReplacement('/plan-trip-screen');
   }
 
   @override

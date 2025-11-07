@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../services/travel_planner_service.dart';
 
 class PlanTripScreen extends StatefulWidget {
   const PlanTripScreen({super.key});
@@ -10,14 +12,124 @@ class PlanTripScreen extends StatefulWidget {
 }
 
 class _PlanTripScreenState extends State<PlanTripScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _destinationController = TextEditingController();
+  final _travelersController = TextEditingController(text: '2');
+  final _service = TravelPlannerService();
+
+  DateTime? _startDate;
+  DateTime? _endDate;
   double _budget = 2500;
   final Set<String> _selectedInterests = {'Culture'};
-  TextEditingController firstDateController = TextEditingController();
-  TextEditingController secondDateController = TextEditingController();
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _destinationController.dispose();
+    _travelersController.dispose();
+    super.dispose();
+  }
+
+  String _formatDate(DateTime date) {
+    return DateFormat('yyyy-MM-dd').format(date);
+  }
+
+  String _displayDate(DateTime date) {
+    return DateFormat('MMM dd, yyyy').format(date);
+  }
+
+  Future<void> _selectDate(BuildContext context, bool isStartDate) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate:
+          isStartDate
+              ? (_startDate ?? DateTime.now())
+              : (_endDate ?? DateTime.now().add(const Duration(days: 1))),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF00A3FF),
+              onPrimary: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        if (isStartDate) {
+          _startDate = picked;
+          // If end date is before start date, reset it
+          if (_endDate != null && _endDate!.isBefore(_startDate!)) {
+            _endDate = null;
+          }
+        } else {
+          _endDate = picked;
+        }
+      });
+    }
+  }
+
+  Future<void> _generateItinerary() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select travel dates')),
+      );
+      return;
+    }
+
+    if (_selectedInterests.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one interest')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _service.planTrip(
+        destination: _destinationController.text.trim(),
+        budget: _budget,
+        numberOfPersons: int.parse(_travelersController.text),
+        startDate: _formatDate(_startDate!),
+        endDate: _formatDate(_endDate!),
+        interests: _selectedInterests.toList(),
+      );
+
+      if (mounted) {
+        context.push('/itinerary', extra: result['itinerary']);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(
           'Plan Your Trip',
@@ -31,192 +143,205 @@ class _PlanTripScreenState extends State<PlanTripScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionTitle('Where to?'),
-            const TextField(
-              decoration: InputDecoration(
-                hintText: 'Paris, France',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Add destination selection widget here
-            _buildSectionTitle('When are you going?'),
-
-            // const SizedBox(height: 24),
-
-            //Add date picker here
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    readOnly: true,
-                    controller: firstDateController,
-                    onTap: () async {
-                      DateTime? pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2101),
-                      );
-
-                      if (pickedDate != null) {
-                        String formattedDate =
-                            "${pickedDate.month}/${pickedDate.day}/${pickedDate.year}";
-
-                        // You can use setState to update the TextField with the selected date
-
-                        setState(() {
-                          firstDateController.text = formattedDate;
-                          // Update the TextField's controller or value here
-                        });
-                      }
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'mm/dd/yyyy',
-                      prefixIcon: Icon(Icons.calendar_today),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionTitle('Where to?'),
+              TextFormField(
+                controller: _destinationController,
+                decoration: InputDecoration(
+                  hintText: 'e.g., Paris, Tokyo, New York',
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: Color(0xFF00A3FF),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF00A3FF),
+                      width: 2,
                     ),
                   ),
                 ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: TextField(
-                    readOnly: true,
-                    controller: secondDateController,
-                    onTap: () async {
-                      DateTime? pickedDate = await showDatePicker(
-                        barrierColor: Colors.black54,
-                        context: context,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2101),
-                      );
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter a destination';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
 
-                      if (pickedDate != null) {
-                        String formattedDate =
-                            "${pickedDate.month}/${pickedDate.day}/${pickedDate.year}";
+              _buildSectionTitle('When are you going?'),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateSelector(
+                      label: 'Start Date',
+                      date: _startDate,
+                      onTap: () => _selectDate(context, true),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildDateSelector(
+                      label: 'End Date',
+                      date: _endDate,
+                      onTap: () => _selectDate(context, false),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
 
-                        // You can use setState to update the TextField with the selected date
-
-                        setState(() {
-                          secondDateController.text = formattedDate;
-                          // Update the TextField's controller or value here
-                        });
-                      }
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'mm/dd/yyyy',
-                      prefixIcon: Icon(Icons.calendar_today),
+              _buildSectionTitle('Number of travelers'),
+              TextFormField(
+                controller: _travelersController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  hintText: 'How many people?',
+                  prefixIcon: const Icon(
+                    Icons.people,
+                    color: Color(0xFF00A3FF),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF00A3FF),
+                      width: 2,
                     ),
                   ),
                 ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            _buildSectionTitle('Who\'s coming?'),
-            const TextField(
-              
-              decoration: InputDecoration(
-                hintText: 'Number of Travelers',
-              
-                prefixIcon: Icon(Icons.person_outline),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter number of travelers';
+                  }
+                  final number = int.tryParse(value);
+                  if (number == null || number < 1) {
+                    return 'Please enter a valid number';
+                  }
+                  return null;
+                },
               ),
-            ),
+              const SizedBox(height: 24),
 
-            const SizedBox(height: 24),
-            _buildSectionTitle('What\'s your budget?'),
-
-            Slider(
-              value: _budget,
-              onChanged: (value) {
-                setState(() {
-                  _budget = value;
-                });
-              },
-              min: 500,
-              max: 50000,
-              divisions: 9,
-              activeColor: const Color(0xFF00A3FF),
-              inactiveColor: Colors.grey[300],
-              label: '\$${_budget.round()}',
-            ),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('\$500', style: TextStyle(color: Colors.grey[600])),
-                Text('\$5000', style: TextStyle(color: Colors.grey[600])),
-              ],
-            ),
-
-            // Add date picker widget here
-            const SizedBox(height: 24),
-            _buildSectionTitle('What are your interests?'),
-
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _buildInterestChip('Culture'),
-                _buildInterestChip('Adventure'),
-                _buildInterestChip('Relaxation'),
-                _buildInterestChip('Nature'),
-                _buildInterestChip('Food & Drink'),
-                _buildInterestChip('History'),
-                _buildInterestChip('Shopping'),
-                _buildInterestChip('Nightlife'),
-              ],
-            ),
-
-            const SizedBox(height: 48),
-
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _isLoading = true;
-                });
-
-                Future.delayed(Duration(seconds: 5), () {
-                  context.push('/itinerary');
-
-                  setState(() {
-                    _isLoading = false;
-                  });
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE0F7FF),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 56),
+              _buildSectionTitle('Budget (USD)'),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0F7FF).withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      '\#${_budget.round().toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF00A3FF),
+                      ),
+                    ),
+                    Slider(
+                      value: _budget,
+                      onChanged: (value) => setState(() => _budget = value),
+                      min: 500,
+                      max: 50000,
+                      divisions: 99,
+                      activeColor: const Color(0xFF00A3FF),
+                      inactiveColor: Colors.grey[300],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('#500', style: TextStyle(color: Colors.grey[600])),
+                        Text(
+                          '#50,000',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              child:
-                  _isLoading
-                      ? const CircularProgressIndicator.adaptive(
-                        backgroundColor: Colors.black, // Optional: for contrast
-                      )
-                      : const Text('Generate Itinerary'),
-            ),
+              const SizedBox(height: 24),
 
-            // Add preferences selection widget here
-            // Center(
-            //   child: ElevatedButton(
-            //     onPressed: () {
-            //       // Handle plan trip action
-            //     },
-            //     child: const Text('Plan My Trip'),
-            //   ),
-            // ),
-          ],
+              _buildSectionTitle('What are your interests?'),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _buildInterestChip('Culture'),
+                  _buildInterestChip('Adventure'),
+                  _buildInterestChip('Relaxation'),
+                  _buildInterestChip('Nature'),
+                  _buildInterestChip('Food & Drink'),
+                  _buildInterestChip('History'),
+                  _buildInterestChip('Shopping'),
+                  _buildInterestChip('Nightlife'),
+                ],
+              ),
+              const SizedBox(height: 48),
+
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _generateItinerary,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00A3FF),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child:
+                      _isLoading
+                          ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                          : const Text(
+                            'Generate Itinerary',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ).animate().fade(duration: 500.ms).slide(begin: const Offset(0, 0.1), duration: 500.ms),
+      ).animate().fade(duration: 500.ms).slideY(begin: 0.1, duration: 500.ms),
     );
   }
 
@@ -225,16 +350,67 @@ class _PlanTripScreenState extends State<PlanTripScreen> {
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Text(
         title,
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateSelector({
+    required String label,
+    required DateTime? date,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_today,
+              size: 20,
+              color: date != null ? const Color(0xFF00A3FF) : Colors.grey,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    date != null ? _displayDate(date) : 'Select date',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight:
+                          date != null ? FontWeight.w600 : FontWeight.normal,
+                      color: date != null ? Colors.black87 : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildInterestChip(String label) {
-    final bool isSelected = _selectedInterests.contains(
-      label,
-    ); // Replace with actual selection logic
-    return ChoiceChip(
+    final bool isSelected = _selectedInterests.contains(label);
+    return FilterChip(
       label: Text(label),
       selected: isSelected,
       onSelected: (selected) {
@@ -247,18 +423,19 @@ class _PlanTripScreenState extends State<PlanTripScreen> {
         });
       },
       backgroundColor: Colors.grey[100],
-      selectedColor: const Color(0xFFE0F7FF),
+      selectedColor: const Color(0xFF00A3FF),
+      checkmarkColor: Colors.white,
       labelStyle: TextStyle(
-        color: isSelected ? const Color(0xFF00A3FF) : Colors.black,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        color: isSelected ? Colors.white : Colors.black87,
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
       ),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         side: BorderSide(
           color: isSelected ? const Color(0xFF00A3FF) : Colors.grey.shade300,
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     );
   }
 }
